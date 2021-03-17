@@ -30,6 +30,7 @@ print("v2i: ", vectorizer.vocabulary_)
 q = "I get a coffee cup"
 qtf_idf = vectorizer.transform([q])
 res = cosine_similarity(tf_idf, qtf_idf)
+# ravel将多维数组降一维；argsort返回数组值从小到大的索引值
 res = res.ravel().argsort()[-3:]
 print("\ntop 3 docs for '{}':\n{}".format(q, [docs[i] for i in res[::-1]]))
 
