@@ -1,10 +1,14 @@
-import numpy as np
 import datetime
-import os
-import requests
-import pandas as pd
-import re
 import itertools
+import os
+import re
+from typing import List
+
+import numpy as np
+import pandas as pd
+import requests
+import torch
+from torch.utils.data import TensorDataset
 
 PAD_ID = 0
 
@@ -108,7 +112,7 @@ def _process_mrpc(dir="./MRPC", rows=None):
     i2v = {i: v for v, i in v2i.items()}
     for n in ["train", "test"]:
         for m in ["s1", "s2"]:
-            data[n][m+"id"] = [[v2i[v] for v in c.split(" ")] for c in data[n][m]]
+            data[n][m + "id"] = [[v2i[v] for v in c.split(" ")] for c in data[n][m]]
     return data, v2i, i2v
 
 
@@ -126,15 +130,16 @@ class MRPCData:
         self.xlen = np.array([
             [
                 len(data["train"]["s1id"][i]), len(data["train"]["s2id"][i])
-             ] for i in range(len(data["train"]["s1id"]))], dtype=int)
+            ] for i in range(len(data["train"]["s1id"]))], dtype=int)
         x = [
-            [self.v2i["<GO>"]] + data["train"]["s1id"][i] + [self.v2i["<SEP>"]] + data["train"]["s2id"][i] + [self.v2i["<SEP>"]]
+            [self.v2i["<GO>"]] + data["train"]["s1id"][i] + [self.v2i["<SEP>"]] + data["train"]["s2id"][i] + [
+                self.v2i["<SEP>"]]
             for i in range(len(self.xlen))
         ]
         self.x = pad_zero(x, max_len=self.max_len)
         self.nsp_y = data["train"]["is_same"][:, None]
 
-        self.seg = np.full(self.x.shape, self.num_seg-1, np.int32)
+        self.seg = np.full(self.x.shape, self.num_seg - 1, np.int32)
         for i in range(len(x)):
             si = self.xlen[i][0] + 2
             self.seg[i, :si] = 0
@@ -203,47 +208,40 @@ class Dataset:
         return len(self.v2i)
 
 
-def process_w2v_data(corpus, skip_window=2, method="skip_gram"):
-    all_words = [sentence.split(" ") for sentence in corpus]
+def process_w2v_data(
+        corpus: List[str],
+        skip_window: int = 2,
+        method: str = "skip_gram"
+):
+    all_words = [sent.split(" ") for sent in corpus]
     all_words = np.array(list(itertools.chain(*all_words)))
-    # vocab sort by decreasing frequency for the negative sampling below (nce_loss).
     vocab, v_count = np.unique(all_words, return_counts=True)
-    vocab = vocab[np.argsort(v_count)[::-1]]
+    vocab = vocab[np.argsort(v_count)[::-1]]  # desc
 
-    print("all vocabularies sorted from more frequent to less frequent:\n", vocab)
-    v2i = {v: i for i, v in enumerate(vocab)}
-    i2v = {i: v for v, i in v2i.items()}
+    w2i = {v: i for i, v in enumerate(vocab)}
+    i2w = {i: v for v, i in w2i.items()}
 
-    # pair data
+    window = [i for i in range(-skip_window, skip_window + 1) if i != 0]
     pairs = []
-    js = [i for i in range(-skip_window, skip_window + 1) if i != 0]
+    for sent in corpus:
+        words = sent.strip().split(" ")
+        word_idx = [w2i[w] for w in words]
+        if method.strip().lower() == "cbow":
+            for i in range(skip_window, len(word_idx) - skip_window):
+                content = []
+                for j in window:
+                    content.append(word_idx[i + j])
+                pairs.append(content + [word_idx[i]])
 
-    for c in corpus:
-        words = c.split(" ")
-        w_idx = [v2i[w] for w in words]
-        if method == "skip_gram":
-            for i in range(len(w_idx)):
-                for j in js:
-                    if i + j < 0 or i + j >= len(w_idx):
-                        continue
-                    pairs.append((w_idx[i], w_idx[i + j]))  # (center, context) or (feature, target)
-        elif method.lower() == "cbow":
-            for i in range(skip_window, len(w_idx) - skip_window):
-                context = []
-                for j in js:
-                    context.append(w_idx[i + j])
-                pairs.append(context + [w_idx[i]])  # (contexts, center) or (feature, target)
-        else:
-            raise ValueError
     pairs = np.array(pairs)
-    print("5 example pairs:\n", pairs[:5])
-    if method.lower() == "skip_gram":
-        x, y = pairs[:, 0], pairs[:, 1]
-    elif method.lower() == "cbow":
+    print(f"five examples:{pairs[:5]}")
+    if method.strip().lower() == "cbow":
         x, y = pairs[:, :-1], pairs[:, -1]
-    else:
-        raise ValueError
-    return Dataset(x, y, v2i, i2v)
+
+    x = torch.from_numpy(x)
+    y = torch.from_numpy(y).type(torch.long)
+
+    return TensorDataset(x, y), w2i, i2w
 
 
 def set_soft_gpu(soft_gpu):

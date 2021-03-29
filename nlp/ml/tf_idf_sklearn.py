@@ -1,6 +1,6 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from visual import show_tfidf   # this refers to visual.py in my [repo](https://github.com/MorvanZhou/NLP-Tutorials/)
+from nlp.tools.visual import show_tfidf   # this refers to visual.py in my [repo](https://github.com/MorvanZhou/NLP-Tutorials/)
 
 
 docs = [
@@ -36,5 +36,5 @@ print("\ntop 3 docs for '{}':\n{}".format(q, [docs[i] for i in res[::-1]]))
 
 
 i2v = {i: v for v, i in vectorizer.vocabulary_.items()}
-dense_tfidf = tf_idf.todense()
+dense_tfidf = tf_idf.todense()  # (15,44)
 show_tfidf(dense_tfidf, [i2v[i] for i in range(dense_tfidf.shape[1])], "tfidf_sklearn_matrix")

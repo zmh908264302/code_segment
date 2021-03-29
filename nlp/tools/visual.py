@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 from matplotlib.pyplot import cm
 import os
-import utils
+from nlp.tools import utils
 
 
 def show_tfidf(tfidf, vocab, filename):
