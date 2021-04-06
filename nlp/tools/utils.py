@@ -226,6 +226,13 @@ def process_w2v_data(
     for sent in corpus:
         words = sent.strip().split(" ")
         word_idx = [w2i[w] for w in words]
+        if method.strip().lower() == "skip_gram":
+            for i in range(len(word_idx)):
+                for j in window:
+                    if i + j < 0 or i + j >= len(word_idx):
+                        continue
+                    pairs.append((word_idx[i], word_idx[i + j]))
+
         if method.strip().lower() == "cbow":
             for i in range(skip_window, len(word_idx) - skip_window):
                 content = []
@@ -237,20 +244,13 @@ def process_w2v_data(
     print(f"five examples:{pairs[:5]}")
     if method.strip().lower() == "cbow":
         x, y = pairs[:, :-1], pairs[:, -1]
+    elif method.strip().lower() == "skip_gram":
+        x, y = pairs[:, 0], pairs[:, 1]
+    else:
+        raise ValueError
 
     x = torch.from_numpy(x)
     y = torch.from_numpy(y).type(torch.long)
 
     return TensorDataset(x, y), w2i, i2w
 
-
-def set_soft_gpu(soft_gpu):
-    import tensorflow as tf
-    if soft_gpu:
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        if gpus:
-            # Currently, memory growth needs to be the same across GPUs
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")

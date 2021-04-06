@@ -1,13 +1,13 @@
 """
-本例以莫烦自然语言系列之Continuous Bag of Words (CBOW)（https://mofanpy.com/tutorials/machine-learning/nlp/cbow/）和
-word2vec的PyTorch实现（https://samaelchen.github.io/word2vec_pytorch/）之toy 版本为蓝本
-"""
+本例以莫烦自然语言系列之Skip-Gram（https://mofanpy.com/tutorials/machine-learning/nlp/skip-gram/）为模板
+实现同样采样莫凡中简化构造思想：本来skip-gram是一个中心词预测上下文，在是现实时可以是一个词预测多次，达到同等效果。
 
+最后预测的实例无法实现与CBOW同等的效果，因为输入确定，输出即确定。我们这里真正要学习的是词向量，而不是预测结果。更多参见讨论。
+"""
 
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -39,33 +39,21 @@ corpus = [
     "i o h n 9 9 d 9 f a 9",
 ]
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
-
-class CBOW(nn.Module):
-    def __init__(self, vocab_num, emb_dim, skip_window, hidden_size=128):
-        super(CBOW, self).__init__()
-        self.vocab_num = vocab_num
+class SkipGram(nn.Module):
+    def __init__(self, vocab_num, emb_dim):
+        super(SkipGram, self).__init__()
         self.embeddings = nn.Embedding(vocab_num, emb_dim)
-        # 上下文，因此需要乘2
-        self.linear1 = nn.Linear(2 * skip_window * emb_dim, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, vocab_num)
-
-        self.embeddings.weight.data.uniform_(-0.5 / vocab_num, 0.5 / vocab_num)
 
     def forward(self, x):
-        # [bsz, seq_len, emb_dim] -> [bsz, seq_len * emb_dim]
-        outputs = self.embeddings(x).view(x.shape[0], -1)  # batch size: x.shape[0]
-        out = F.relu(self.linear1(outputs))
-        out = self.linear2(out)
-        logits = F.log_softmax(out, dim=1)
-        return logits
+        outputs = self.embeddings(x)
+        return outputs
 
 
-def train(model, dataset, loss_func, optimizer, bsz=4):
-    data_iter = DataLoader(dataset, bsz)  # , drop_last=True)
+def train(model, dataset, loss_func, optimizer, bsz=8):
+    data_iter = DataLoader(dataset, batch_size=bsz)
     losses = []
-    epoches = 20
+    epoches = 10
     for epoch in range(epoches):
         total_loss = 0
         step = 0
@@ -86,15 +74,16 @@ def train(model, dataset, loss_func, optimizer, bsz=4):
 
 
 if __name__ == '__main__':
-    dataset, w2i, i2w = process_w2v_data(corpus, skip_window=2, method="cbow")
-    model = CBOW(len(dataset), 32, 2)
+    dataset, w2i, i2w = process_w2v_data(corpus, skip_window=2, method="skip_gram")
+    model = SkipGram(len(dataset), 32)
     loss_func = torch.nn.NLLLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
     model = train(model, dataset, loss_func, optimizer)
+
     # 5 2 4 8 6
-    # d g 9 s a
+    # e h 9 u f
     model.eval()
-    logits = model(torch.tensor([[w2i["5"], w2i["2"], w2i["8"], w2i["6"]]]))
-    logits = model(torch.tensor([[w2i["d"], w2i["g"], w2i["s"], w2i["a"]]]))
-    out = torch.max(logits, 1)
-    print(i2w[out[1].item()])
+    for _ in range(4):
+        logits = model(torch.tensor([w2i["9"]]))
+        out = torch.max(logits, 1)
+        print(i2w[out[1].item()])
