@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 import requests
 import torch
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, Dataset
 
 PAD_ID = 0
 
 
-class DateData:
+class DateData(Dataset):
     def __init__(self, n):
         np.random.seed(1)
         self.date_cn = []
@@ -23,8 +23,8 @@ class DateData:
             self.date_cn.append(date.strftime("%y-%m-%d"))
             self.date_en.append(date.strftime("%d/%b/%Y"))
         self.vocab = set(
-            [str(i) for i in range(0, 10)] + ["-", "/", "<GO>", "<EOS>"] + [
-                i.split("/")[1] for i in self.date_en])
+            [str(i) for i in range(0, 10)] + ["-", "/", "<GO>", "<EOS>"] + [i.split("/")[1] for i in self.date_en]
+        )
         self.v2i = {v: i for i, v in enumerate(sorted(list(self.vocab)), start=1)}
         self.v2i["<PAD>"] = PAD_ID
         self.vocab.add("<PAD>")
@@ -32,19 +32,21 @@ class DateData:
         self.x, self.y = [], []
         for cn, en in zip(self.date_cn, self.date_en):
             self.x.append([self.v2i[v] for v in cn])
-            self.y.append(
-                [self.v2i["<GO>"], ] + [self.v2i[v] for v in en[:3]] + [
-                    self.v2i[en[3:6]], ] + [self.v2i[v] for v in en[6:]] + [
-                    self.v2i["<EOS>"], ])
+            self.y.append([self.v2i["<GO>"], ] + [self.v2i[v] for v in en[:3]] + [
+                self.v2i[en[3:6]]] + [self.v2i[v] for v in en[6:]] + [self.v2i["<EOS>"], ])
         self.x, self.y = np.array(self.x), np.array(self.y)
         self.start_token = self.v2i["<GO>"]
         self.end_token = self.v2i["<EOS>"]
 
-    def sample(self, n=64):
-        bi = np.random.randint(0, len(self.x), size=n)
-        bx, by = self.x[bi], self.y[bi]
-        decoder_len = np.full((len(bx),), by.shape[1] - 1, dtype=np.int32)
-        return bx, by, decoder_len
+    def __len__(self):
+        return len(self.x)
+
+    @property
+    def num_word(self):
+        return len(self.vocab)
+
+    def __getitem__(self, index):
+        return self.x[index], self.y[index], len(self.y[index]) - 1
 
     def idx2str(self, idx):
         x = []
@@ -53,10 +55,6 @@ class DateData:
             if i == self.end_token:
                 break
         return "".join(x)
-
-    @property
-    def num_word(self):
-        return len(self.vocab)
 
 
 def pad_zero(seqs, max_len):
@@ -253,4 +251,3 @@ def process_w2v_data(
     y = torch.from_numpy(y).type(torch.long)
 
     return TensorDataset(x, y), w2i, i2w
-
