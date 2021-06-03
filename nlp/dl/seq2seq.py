@@ -60,27 +60,24 @@ class Seq2Seq(torch.nn.Module):
         hx, cx = self.encode(x)
         hx, cx = hx[0], cx[0]
         dec_in = y[:, :-1]
-        dec_emb_in = self.dec_embeddings(dec_in)
-        dec_emb_in = dec_emb_in.permute(1, 0, 2)
+        dec_emb_in = self.dec_embeddings(dec_in)  # [batch, seq-1, emb_dim]
+        dec_emb_in = dec_emb_in.permute(1, 0, 2)  # [seq-1, batch, emb_dim]
         output = []
         for i in range(dec_emb_in.shape[0]):
-            hx, cx = self.decoder_cell(dec_emb_in[i], (hx, cx))
-            o = self.decoder_dense(hx)
+            hx, cx = self.decoder_cell(dec_emb_in[i], (hx, cx))  # hx: [batch, hidden_size]
+            o = self.decoder_dense(hx)  # [batch, dec_v_dim]
             output.append(o)
-        output = torch.stack(output, dim=0)
+        output = torch.stack(output, dim=0)  # [seq-1, batch, dec_v_dim]
         return output.permute(1, 0, 2)
 
     def step(self, x, y):
         self.optim.zero_grad()
-        logit = self.train_logit(x, y)
-        dec_out = y[:, 1:]
+        logit = self.train_logit(x, y)  # [batch, seq-1, dec_v_dim]
+        dec_out = y[:, 1:]  # [batch, seq-1]
         loss = self.loss_func(logit.reshape(-1, self.dec_v_dim), dec_out.reshape(-1).long())
         loss.backward()
         self.optim.step()
         return loss.detach().numpy()
-
-    def forward(self):
-        pass
 
 
 def train():
