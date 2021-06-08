@@ -13,8 +13,8 @@ class CNNTranslation(torch.nn.Module):
 
         # encoder
         self.enc_embeddings = torch.nn.Embedding(enc_v_dim, emb_dim)
-        self.enc_embeddings.weight.data.normal_(0, 0.1)
-        self.conv2ds = [torch.nn.Conv2d(1, 16, (n, emb_dim), padding=0) for n in range(2, 5)]
+        # self.enc_embeddings.weight.data.normal_(0, 0.1)
+        self.conv2ds = [torch.nn.Conv2d(1, 16, kernel_size=(n, emb_dim), padding=0) for n in range(2, 5)]
         self.max_pools = [torch.nn.MaxPool2d((n, 1)) for n in [7, 6, 5]]
         self.encoder = torch.nn.Linear(16 * 3, units)
 
